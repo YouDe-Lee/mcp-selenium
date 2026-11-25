@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import { Driver, Options, ServiceBuilder } from 'selenium-webdriver/chrome.js';
+import { resolveElectronDriver } from './electron-driver.js';
 
 export function validAddress(value) {
     if (typeof value !== 'string') return false;
@@ -12,12 +13,12 @@ export function validAddress(value) {
     return host.length <= 253 && host.split('.').every(label => /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)$/.test(label));
 }
 
-export async function attachElectron({ address, chromeDriverPath }, state, api = { Driver, Options, ServiceBuilder }) {
+export async function attachElectron({ address }, state, api = { Driver, Options, ServiceBuilder }) {
     if (!validAddress(address)) return { isError: true, content: [{ type: 'text', text: 'Invalid debugging address; expected hostname or IP address and port, without a URL scheme.' }] };
-    if (chromeDriverPath !== undefined && (typeof chromeDriverPath !== 'string' || !chromeDriverPath.trim())) return { isError: true, content: [{ type: 'text', text: 'ChromeDriver path must be a nonempty executable path.' }] };
     let service, driver;
     try {
-        service = new api.ServiceBuilder(chromeDriverPath).build();
+        const driverPath = await (api.resolveElectronDriver || resolveElectronDriver)(address);
+        service = new api.ServiceBuilder(driverPath).build();
         const options = new api.Options().debuggerAddress(address);
         driver = api.Driver.createSession(options, service);
         await driver.getSession();
@@ -38,7 +39,7 @@ export async function attachElectron({ address, chromeDriverPath }, state, api =
         }
         const reason = error.message === 'window count'
             ? 'Expected exactly one browser window; close extra windows or expose a single target before attaching.'
-            : 'Could not attach. Check that the debugging endpoint is reachable and that ChromeDriver is compatible with the application Chromium version and executable path.';
+            : `Could not attach: ${error.message}`;
         return { isError: true, content: [{ type: 'text', text: `Electron attachment failed: ${reason}${cleanupFailed ? ' Cleanup encountered an error; check for a remaining ChromeDriver process.' : ''}` }] };
     }
 }
