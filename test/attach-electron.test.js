@@ -11,7 +11,6 @@ function fixture({ handles = ['one'], fail = false } = {}) {
         quit: async () => calls.push(['quit'])
     };
     const api = {
-        resolveElectronDriver: async () => 'resolved-driver',
         ServiceBuilder: class { constructor(path) { calls.push(['path', path]); } build() { return { kill: async () => calls.push(['kill']) }; } },
         Options: class { debuggerAddress(value) { calls.push(['address', value]); return this; } },
         Driver: { createSession: (options, service) => { calls.push(['create', options, service]); return driver; } }
@@ -26,23 +25,17 @@ test('validates host and port without accepting URLs or credentials', () => {
 
 test('creates and registers the attached driver', async () => {
     const f = fixture(); const state = { drivers: new Map(), currentSession: null };
-    const result = await attachElectron({ address: 'localhost:9222' }, state, f.api);
+    const result = await attachElectron({ address: 'localhost:9222', chromeDriverPath: 'driver' }, state, f.api);
     assert.equal(result.isError, undefined);
     assert.equal(state.drivers.get(state.currentSession), f.driver);
-    assert.deepEqual(f.calls.slice(0, 2), [['path', 'resolved-driver'], ['address', 'localhost:9222']]);
+    assert.deepEqual(f.calls.slice(0, 2), [['path', 'driver'], ['address', 'localhost:9222']]);
     assert.deepEqual(f.calls.at(-1), ['window', 'one']);
-});
-
-test('resolves a driver when no path is supplied', async () => {
-    const f = fixture(); const state = { drivers: new Map(), currentSession: null };
-    const result = await attachElectron({ address: 'localhost:9222' }, state, f.api);
-    assert.equal(result.isError, undefined);
-    assert.deepEqual(f.calls[0], ['path', 'resolved-driver']);
 });
 
 test('rejects bad inputs before creating a service', async () => {
     const f = fixture(); const state = { drivers: new Map(), currentSession: null };
     assert.equal((await attachElectron({ address: 'bad' }, state, f.api)).isError, true);
+    assert.equal((await attachElectron({ address: 'host:1', chromeDriverPath: ' ' }, state, f.api)).isError, true);
     assert.equal(f.calls.length, 0);
 });
 

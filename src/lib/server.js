@@ -61,7 +61,8 @@ server.tool(
     'attach_electron',
     'Attaches to an already running Electron application with exactly one browser window',
     {
-        address: z.string().describe('Chromium debugging address as host:port')
+        address: z.string().describe('Chromium debugging address as host:port'),
+        chromeDriverPath: z.string().optional().describe('Path to a compatible ChromeDriver executable')
     },
     async (args) => attachElectron(args, state)
 );
