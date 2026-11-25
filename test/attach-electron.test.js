@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { attachElectron, validAddress } from '../attach-electron.js';
+import { attachElectron, validAddress } from '../src/lib/attach-electron.js';
 
 function fixture({ handles = ['one'], fail = false } = {}) {
     const calls = [];
@@ -11,6 +11,8 @@ function fixture({ handles = ['one'], fail = false } = {}) {
         quit: async () => calls.push(['quit'])
     };
     const api = {
+        getChromiumBuild: async address => { calls.push(['version', address]); return '142.0.7444'; },
+        resolveChromeDriver: async build => { calls.push(['resolve', build]); return 'driver'; },
         ServiceBuilder: class { constructor(path) { calls.push(['path', path]); } build() { return { kill: async () => calls.push(['kill']) }; } },
         Options: class { debuggerAddress(value) { calls.push(['address', value]); return this; } },
         Driver: { createSession: (options, service) => { calls.push(['create', options, service]); return driver; } }
@@ -25,18 +27,30 @@ test('validates host and port without accepting URLs or credentials', () => {
 
 test('creates and registers the attached driver', async () => {
     const f = fixture(); const state = { drivers: new Map(), currentSession: null };
-    const result = await attachElectron({ address: 'localhost:9222', chromeDriverPath: 'driver' }, state, f.api);
+    const result = await attachElectron({ address: 'localhost:9222' }, state, f.api);
     assert.equal(result.isError, undefined);
     assert.equal(state.drivers.get(state.currentSession), f.driver);
-    assert.deepEqual(f.calls.slice(0, 2), [['path', 'driver'], ['address', 'localhost:9222']]);
+    assert.deepEqual(f.calls.slice(0, 4), [['version', 'localhost:9222'], ['resolve', '142.0.7444'], ['path', 'driver'], ['address', 'localhost:9222']]);
     assert.deepEqual(f.calls.at(-1), ['window', 'one']);
 });
 
 test('rejects bad inputs before creating a service', async () => {
     const f = fixture(); const state = { drivers: new Map(), currentSession: null };
     assert.equal((await attachElectron({ address: 'bad' }, state, f.api)).isError, true);
-    assert.equal((await attachElectron({ address: 'host:1', chromeDriverPath: ' ' }, state, f.api)).isError, true);
     assert.equal(f.calls.length, 0);
+});
+
+test('reports discovery failures without starting a driver', async () => {
+    for (const step of ['getChromiumBuild', 'resolveChromeDriver']) {
+        const f = fixture();
+        f.api[step] = async () => { throw new Error('discovery failed'); };
+        const state = { drivers: new Map(), currentSession: null };
+        const result = await attachElectron({ address: 'localhost:9222' }, state, f.api);
+        assert.equal(result.isError, true);
+        assert.match(result.content[0].text, /discovery failed/);
+        assert.equal(f.calls.some(call => call[0] === 'path'), false);
+        assert.equal(state.currentSession, null);
+    }
 });
 
 test('cleans up failures and preserves the current session', async () => {

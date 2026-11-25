@@ -8,7 +8,7 @@ const { Builder, By, Key, until, Actions } = pkg;
 import { Options as ChromeOptions } from 'selenium-webdriver/chrome.js';
 import { Options as FirefoxOptions } from 'selenium-webdriver/firefox.js';
 import { Options as EdgeOptions } from 'selenium-webdriver/edge.js';
-import { attachElectron } from '../../attach-electron.js';
+import { attachElectron } from './attach-electron.js';
 
 
 // Create an MCP server
@@ -61,8 +61,7 @@ server.tool(
     'attach_electron',
     'Attaches to an already running Electron application with exactly one browser window',
     {
-        address: z.string().describe('Chromium debugging address as host:port'),
-        chromeDriverPath: z.string().optional().describe('Path to a compatible ChromeDriver executable')
+        address: z.string().describe('Chromium debugging address as host:port')
     },
     async (args) => attachElectron(args, state)
 );
